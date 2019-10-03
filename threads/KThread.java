@@ -280,6 +280,20 @@ public class KThread
 
         Lib.assertTrue(this != currentThread);
 
+        joinLock.acquire();
+
+        if(status == statusFinished)
+        {
+            joinLock.release();
+        }
+        else
+        {
+            Machine.interrupt().disable();
+            this.joinQueue.waitForAccess(currentThread);
+            Machine.interrupt().enable();
+            isFinished.sleep();
+            joinLock.release();
+        }
     }
 
     /**
@@ -440,6 +454,10 @@ public class KThread
     private String name = "(unnamed thread)";
     private Runnable target;
     private TCB tcb;
+
+    private ThreadQueue joinQueue = ThreadedKernel.scheduler.newThreadQueue(true);
+    private Condition2 isFinished;
+    private static Lock joinLock = new Lock();
 
     /**
      * Unique identifer for this thread. Used to deterministically compare
