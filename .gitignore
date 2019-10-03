@@ -1,2 +1,6 @@
 /.idea
-nachos-os.iml
+nachos.iml
+/proj1/nachos
+/proj2/nachos
+/proj3/nachos
+/proj4/nachos
