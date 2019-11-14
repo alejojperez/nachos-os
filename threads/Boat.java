@@ -6,24 +6,17 @@ import java.util.*;
 public class Boat
 {
     static BoatGrader bg;
-
+ 
     static int SURRENDER_WAIT_TIME = 	50000;
     static int CHILD_ORIGIN_WAIT_TIME = 1000;
-
+    
     public static void selfTest()
     {
 	BoatGrader b = new BoatGrader();
 
-	System.out.println("\n ***Testing Boats with only 2 children***");
-	begin(0, 2, b);
-
-	System.out.println("\n ***Testing Boats with 2 children, 1 adult***");
-  	begin(1, 2, b);
-
-  	System.out.println("\n ***Testing Boats with 3 children, 3 adults***");
-  	begin(3, 3, b);
+  	begin(246, 2, b);
     }
-
+    
     Lock globalMutex = new Lock();
     Communicator endReporter = new Communicator();
     int childrenAtDest = 0;	// the number of children at the dest as tracked
@@ -34,19 +27,19 @@ public class Boat
     }
     Island originIsland;
     Island destIsland;
-
-
+    
+    
     //ArrayList<Person> plist = new ArrayList<Person>();
     public class ABoat {
     	Island loc;
     	boolean canBoard = true;
     	int runCounter = 0;
     	int surrenderCounter = 0;
-
+    	
     	Condition waitingPassenger;
     	Person pilot = null;
     	Person passenger = null;
-
+    	
     	boolean canEmbark(Person person) {
     		if (loc != person.loc) {
     			return false;
@@ -54,7 +47,7 @@ public class Boat
     		if (!canBoard) {
     			return false;
     		}
-
+    		
     		if (person instanceof Adult) {
     			return (pilot==null && passenger==null);
     		} else if (person instanceof Child) {
@@ -81,7 +74,7 @@ public class Boat
     	boolean isPassenger(Person person) {
     		return passenger==person;
     	}
-
+    	
     	// person boards a boat
     	// once ready to depart, isFull returns true
     	// returns true if embarked as pilot
@@ -108,14 +101,14 @@ public class Boat
     			return false;
     		}
     	}
-
+    	
     	// embarks a child as a pilot
     	void embarkAsPilot(Person person) {
     		Lib.assertTrue(person.loc == loc);
     		Lib.assertTrue(pilot==null);
 			pilot = person;
     	}
-
+    	
     	void disembark(Person person) {
     		Lib.assertTrue(person.loc == loc);
     		if (person == pilot) {
@@ -128,7 +121,7 @@ public class Boat
     	}
     }
     ABoat theBoat;
-
+    
     public abstract class Person implements Runnable {
     	Island loc;
     	int rememberedSurrenderCounter = 0;
@@ -140,7 +133,7 @@ public class Boat
     			if (theBoat.isOnBoat(this)) {
         			if (loc == originIsland) {
         				// arrived at origin
-        				dbg("arrive origin");
+        				dbg("arrive origin");    				
         				boatArriveAtOrigin();
         			} else if (loc == destIsland) {
         				// arrived at destination
@@ -152,12 +145,12 @@ public class Boat
     			} else {
     				if (loc.surrenderCounter > rememberedSurrenderCounter) {
     					rememberedSurrenderCounter = loc.surrenderCounter;
-
+    					
         				int island = (loc == destIsland)? 1 : 0;
         				int comms = rememberedSurrenderCounter * 2 + island;
         				endReporter.speak(comms);
         				dbg("Surrender " + island + " on counter " + rememberedSurrenderCounter);
-
+        				
         				if (loc == destIsland) {
 	        				globalMutex.release();
 	        				ThreadedKernel.alarm.waitUntil(SURRENDER_WAIT_TIME);
@@ -178,25 +171,25 @@ public class Boat
     			}
     		}
     	}
-
+    	
     	abstract void boatArriveAtOrigin();
     	abstract void boatArriveAtDest();
     	abstract void originLogic();
     	abstract void destLogic();
-
+    	
     	void row_row_row_the_boat(Island dest) {
     		Lib.assertTrue(dest != loc);
     		Lib.assertTrue(dest != theBoat.loc);
-
+    		
     		theBoat.runCounter++;	// paint a number on the boat
-
+    		
     		theBoat.loc = dest;
     		theBoat.pilot.loc = dest;
     		if (theBoat.passenger != null) {
     			theBoat.passenger.loc = dest;
     		}
     	}
-
+    	
     	void dbg(String msg) {
     		System.out.println(KThread.currentThread().getName() + ": " + msg);
     	}
@@ -210,12 +203,12 @@ public class Boat
     	void boatArriveAtDest() {
     		bg.AdultRowToMolokai();
     		dbg("arrived at dest");
-
+    		
     		theBoat.disembark(this);
     		loc.waitingPeople.wakeAll();
     		loc.waitingPeople.sleep();
     	}
-
+    	
     	void originLogic() {
     		if (childrenAtDest > 0 && theBoat.canEmbark(this)) {
     			theBoat.embark(this);
@@ -229,40 +222,40 @@ public class Boat
     		loc.waitingPeople.sleep();
     	}
     }
-
+    
     public class Child extends Person {
     	void boatArriveAtOrigin() {
     		Lib.assertTrue(theBoat.isPilot(this));
     		bg.ChildRowToOahu();
     		dbg("arrived at origin");
-
+    		
     		theBoat.disembark(this);
     		childrenAtDest--;
     		dbg("child origin arrive " + childrenAtDest);
     		loc.waitingPeople.wakeAll();
     		int lastBoatRunCounter = theBoat.runCounter;
-
+    		
     		globalMutex.release();
 	    	ThreadedKernel.alarm.waitUntil(CHILD_ORIGIN_WAIT_TIME);
 	    	globalMutex.acquire();
-
+	    	
 	    	if (theBoat.runCounter == lastBoatRunCounter) {
 	    		if (theBoat.canEmbark(this)) {
 	    			if (theBoat.isEmpty()) {
 	    				theBoat.embarkAsPilot(this);
 	    				childrenAtDest++;
-
+	    				
 	    				while (childrenAtDest <= 1) {
 	    					loc.waitingPeople.wakeAll();
 	    					globalMutex.release();
 	    			    	ThreadedKernel.alarm.waitUntil(CHILD_ORIGIN_WAIT_TIME);
 	    			    	globalMutex.acquire();
 	    				}
-
+	    				
 	    				loc.surrenderCounter++;
 	    				dbg("Raising surrender counter to " + loc.surrenderCounter);
 	    				theBoat.surrenderCounter = loc.surrenderCounter;
-
+	    				
 	    				row_row_row_the_boat(destIsland);
 		        		// fall through to next loop, run arrival logic
 	    			} else {
@@ -276,16 +269,16 @@ public class Boat
 	    	} else {
 	    		loc.waitingPeople.sleep();
 	    	}
-    	}
-
+    	} 
+    	
     	void boatArriveAtDest() {
     		if (theBoat.isPassenger(this)) {
     			bg.ChildRideToMolokai();
     		} else if (theBoat.isPilot(this)) {
-    			bg.ChildRowToMolokai();
+    			bg.ChildRowToMolokai();    			
     		}
     		dbg("arrived at dest");
-
+    		
 			theBoat.disembark(this);
 			loc.surrenderCounter = theBoat.surrenderCounter;
 			if (theBoat.isEmpty()) {
@@ -303,7 +296,7 @@ public class Boat
 				dbg("destination woken");
 			}
     	}
-
+    	
     	void originLogic() {
     		if (theBoat.canEmbark(this)) {
     			dbg("origin board");
@@ -331,19 +324,19 @@ public class Boat
     		}
     	}
     }
-
-    public void instanceBegin( int adults, int children, BoatGrader b ) {
+    
+    public void instanceBegin( int adults, int children, BoatGrader b ) {	
     	globalMutex = new Lock();
-
+    	
     	originIsland = new Island();
     	originIsland.waitingPeople = new Condition(globalMutex);
     	destIsland = new Island();
     	destIsland.waitingPeople = new Condition(globalMutex);
-
+    	
     	theBoat = new ABoat();
     	theBoat.loc = originIsland;
     	theBoat.waitingPassenger = new Condition(globalMutex);
-
+    	
     	for (int i=0;i<adults;i++) {
     		Person thisGuy = new Adult();
     		//plist.add(thisGuy);
@@ -362,7 +355,7 @@ public class Boat
             t.fork();
             System.out.println("Forked " + t.getName());
     	}
-
+    	
     	ArrayList<Integer> destReplies = new ArrayList<Integer>();
     	//ArrayList<Boolean> failed = new ArrayList<Boolean>();
     	int lastRun = 0;
@@ -373,7 +366,7 @@ public class Boat
     		int recv = endReporter.listen();
     		int island = recv % 2;
     		int run = recv / 2;
-
+    		
     		if (run > lastRun) {
     			lastRun = run;
     			counter = 0;
@@ -387,18 +380,9 @@ public class Boat
     			}
     		}
     	}
-    	/*System.out.println("Final test");
-      	for (Person p : plist) {
-      		if (p.loc != destIsland) {
-      			System.out.println("FAILED************");
-      		} else {
-      		//	System.out.println("       OK");
-      		}
-
-        }*/
 
     }
-
+    
     public static void begin( int adults, int children, BoatGrader b )
     {
 	// Store the externally generated autograder in a class
@@ -406,11 +390,11 @@ public class Boat
 	bg = b;
 
 	// Instantiate global variables here
-
+	
 	// Create threads here. See section 3.4 of the Nachos for Java
 	// Walkthrough linked from the projects page.
 	Boat me = new Boat();
-
+	
 	me.instanceBegin(adults, children, b);
     }
 
@@ -440,5 +424,5 @@ public class Boat
 	bg.AdultRideToMolokai();
 	bg.ChildRideToMolokai();
     }
-
+    
 }
